@@ -44,7 +44,7 @@ export function registerAuth(app,db,config){
     await audit(db,user.tenant_id,user.id,'auth.login',user.id);
     reply.setCookie('unagi_session',raw,{httpOnly:true,sameSite:'strict',secure:config.production,path:'/',maxAge:28800});return {ok:true};
   });
-  app.get('/api/auth/me',{preHandler:app.admin},async req=>({id:req.user.id,name:req.user.name,email:req.user.email,role:req.user.role,tenantId:req.user.tenant_id,csrf:req.user.csrf,totpEnabled:!!req.user.totp_secret}));
+  app.get('/api/auth/me',{preHandler:app.admin},async req=>({id:req.user.id,name:req.user.name,email:req.user.email,role:req.user.role,tenantId:req.user.tenant_id,csrf:req.user.csrf,totpEnabled:!!req.user.totp_secret,totpRequired:config.production&&!req.user.totp_secret}));
   app.post('/api/auth/logout',{preHandler:app.admin},async(req,reply)=>{await db.query('DELETE FROM sessions WHERE token_hash=$1',[hash(req.cookies.unagi_session)]);reply.clearCookie('unagi_session',{path:'/'});return {ok:true};});
   app.post('/api/auth/totp/start',{preHandler:app.admin},async req=>{
     need(!req.user.totp_secret,409,'Двухфакторная защита уже включена');const secret=totpSecret();await db.query('UPDATE users SET totp_pending=$2 WHERE id=$1',[req.user.id,seal(secret,config.key)]);

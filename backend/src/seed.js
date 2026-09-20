@@ -4,14 +4,14 @@ import { id,passwordHash } from './security.js';
 import { one,insert } from './db.js';
 import { brand,branch,paymentMethod,theme } from './schemas.js';
 
-export async function seed(db,{adminPassword,ownerPassword}){
+export async function seed(db,{adminPassword,ownerPassword,adminEmail='admin@platform.local',ownerEmail='owner@unagi.local'}){
   if(await one(db,'SELECT id FROM users LIMIT 1'))return false;
   const sandbox={globalThis:{}};vm.runInNewContext(await readFile(new URL('../../shared/www/menu.js',import.meta.url),'utf8'),sandbox);
   const menu=await sandbox.globalThis.UnagiMenu.load();
   await db.transaction(async tx=>{
     await tx.query("INSERT INTO tenants(id,name,email) VALUES('unagi','UNAGI','owner@example.invalid')");
-    await tx.query('INSERT INTO users(id,email,name,role,password) VALUES($1,$2,$3,$4,$5)',[id(),'admin@platform.local','Оператор платформы','platform',await passwordHash(adminPassword)]);
-    await tx.query('INSERT INTO users(id,email,name,role,password,tenant_id) VALUES($1,$2,$3,$4,$5,$6)',[id(),'owner@unagi.local','Владелец UNAGI','owner',await passwordHash(ownerPassword),'unagi']);
+    await tx.query('INSERT INTO users(id,email,name,role,password) VALUES($1,$2,$3,$4,$5)',[id(),adminEmail,'Оператор платформы','platform',await passwordHash(adminPassword)]);
+    await tx.query('INSERT INTO users(id,email,name,role,password,tenant_id) VALUES($1,$2,$3,$4,$5,$6)',[id(),ownerEmail,'Владелец UNAGI','owner',await passwordHash(ownerPassword),'unagi']);
     for(let i=1;i<=3;i++){
       const brandId='unagi-'+i,branchId='point-'+i;
       await insert(tx,'unagi','brand',brandId,brand.parse({name:'UNAGI · бренд '+i,description:'Тестовое название. Укажите реальный бренд перед подключением.'}));

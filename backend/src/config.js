@@ -9,7 +9,7 @@ export function configuration(env = process.env) {
   const origin = env.PUBLIC_ORIGIN || 'http://127.0.0.1:4300';
   if (production && (!origin.startsWith('https://') || !env.DATABASE_URL)) throw new Error('Production requires HTTPS PUBLIC_ORIGIN and DATABASE_URL');
   return {
-    production, key, origin, port: Number(env.PORT || 4300), host: env.HOST || '127.0.0.1',
+    production, key, origin, trustProxy: env.TRUST_LOOPBACK_PROXY === 'true' ? ['127.0.0.1','::1'] : false, port: Number(env.PORT || 4300), host: env.HOST || '127.0.0.1',
     databaseUrl: env.DATABASE_URL, dataDir: env.DATA_DIR || path.join(root, '.data', 'postgres'),
     smsruKey: env.SMSRU_API_KEY || '', smtpHost: env.SMTP_HOST || '', smtpPort: Number(env.SMTP_PORT || 465),
     smtpUser: env.SMTP_USER || '', smtpPassword: env.SMTP_PASSWORD || '', mailFrom: env.MAIL_FROM || '',

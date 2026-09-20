@@ -122,3 +122,20 @@ test('call verification is bound to tenant and proof, and is consumed exactly on
 test('logout revokes server session immediately',async()=>{
   const headers=await login('operator@unagi.local');assert.equal((await req(headers,'POST','/api/auth/logout')).statusCode,200);assert.equal((await req(headers,'GET','/api/auth/me')).statusCode,401);
 });
+
+test('server first login can enroll 2FA while business endpoints stay protected',async()=>{
+  const secureOrigin='https://example.invalid';
+  const secure=await createApp({...config,production:true,origin:secureOrigin,trustProxy:['127.0.0.1']},db);
+  try{
+    const signed=await secure.inject({method:'POST',url:'/api/auth/login',headers:{origin:secureOrigin},payload:{email:'owner@unagi.local',password}});
+    assert.equal(signed.statusCode,200);assert.equal(signed.cookies[0].secure,true);
+    const cookie=signed.cookies[0].name+'='+signed.cookies[0].value;
+    const me=await secure.inject({url:'/api/auth/me',headers:{cookie}});assert.equal(me.json().totpRequired,true);
+    const headers={cookie,origin:secureOrigin,'x-csrf-token':me.json().csrf};
+    assert.equal((await secure.inject({url:'/api/admin/unagi/overview',headers})).statusCode,403);
+    const start=await secure.inject({method:'POST',url:'/api/auth/totp/start',headers});assert.equal(start.statusCode,200);
+    const confirm=await secure.inject({method:'POST',url:'/api/auth/totp/confirm',headers,payload:{code:totp(start.json().secret)}});assert.equal(confirm.statusCode,200);
+    assert.equal((await secure.inject({url:'/api/auth/me',headers})).json().totpRequired,false);
+    assert.equal((await secure.inject({url:'/api/admin/unagi/overview',headers})).statusCode,200);
+  }finally{await secure.close();}
+});

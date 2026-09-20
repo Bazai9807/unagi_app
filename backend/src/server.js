@@ -14,7 +14,7 @@ import { registerBilling,queueReminders,deliverOne } from './billing.js';
 import { ZodError } from 'zod';
 
 export async function createApp(config,db){
-  const app=Fastify({logger:false,bodyLimit:256*1024,trustProxy:false});
+  const app=Fastify({logger:false,bodyLimit:256*1024,trustProxy:config.trustProxy||false});
   await app.register(cookie);
   await app.register(rateLimit,{max:180,timeWindow:'1 minute'});
   app.addHook('onRequest',async(req,reply)=>{
