@@ -1,0 +1,10 @@
+{
+  "name": "unagi-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared Unagi client with Android shell and planned iOS shell",
+  "scripts": {
+    "test": "node --test --test-isolation=none tests/domain.test.cjs",
+    "preview": "node scripts/preview.cjs"
+  }
+}

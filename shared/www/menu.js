@@ -1,0 +1,25 @@
+// DemoMenuRepository is the replacement point for a future server-side iiko integration.
+// Product prices are integers in rubles. Never accept client prices in a production order API.
+(function (root) {
+  const products = [
+    { id: 'philadelphia', name: 'Филадельфия', category: 'rolls', price: 590, weight: 260, pieces: 8, art: 'salmon', badge: 'Хит', description: 'Та самая классика. Нежный лосось, сливочный сыр и свежий огурец в тонком слое риса.', ingredients: 'Рис, лосось, сливочный сыр, огурец, нори', allergens: 'Рыба, молоко', calories: 218 },
+    { id: 'unagi-roll', name: 'Унаги ролл', category: 'rolls', price: 650, weight: 245, pieces: 8, art: 'eel', badge: 'Выбор Unagi', description: 'Копчёный угорь, сливочный сыр и огурец. Сверху — соус унаги и белый кунжут.', ingredients: 'Рис, угорь, сливочный сыр, огурец, нори, соус унаги, кунжут', allergens: 'Рыба, молоко, соя, пшеница, кунжут', calories: 245 },
+    { id: 'california', name: 'Калифорния', category: 'rolls', price: 490, weight: 240, pieces: 8, art: 'roe', description: 'Сочный снежный краб, авокадо и огурец под яркой шапкой икры масаго.', ingredients: 'Рис, сурими, авокадо, огурец, масаго, нори, майонез', allergens: 'Рыба, ракообразные, яйца, соя, пшеница', calories: 205 },
+    { id: 'avocado', name: 'Авокадо маки', category: 'rolls', price: 290, weight: 150, pieces: 6, art: 'green', badge: 'Растительное', description: 'Спелый авокадо, рис и нори. Три ингредиента, которые отлично звучат вместе.', ingredients: 'Рис, авокадо, нори', allergens: 'Возможно перекрёстное присутствие аллергенов', calories: 180 },
+    { id: 'salmon-bake', name: 'Запечённый лосось', category: 'hot', price: 550, weight: 280, pieces: 8, art: 'baked', badge: 'Горячее', description: 'Тёплый ролл с лососем под золотистой сырной шапкой и соусом унаги.', ingredients: 'Рис, лосось, сливочный сыр, нори, сырный соус, соус унаги', allergens: 'Рыба, молоко, яйца, соя, пшеница', calories: 275 },
+    { id: 'shrimp-tempura', name: 'Креветка темпура', category: 'hot', price: 590, weight: 265, pieces: 8, art: 'tempura', description: 'Хрустящая темпура с креветкой, сливочным сыром и огурцом. Подаём с соусом спайси.', ingredients: 'Рис, креветка, сливочный сыр, огурец, нори, кляр, соус спайси', allergens: 'Ракообразные, молоко, яйца, пшеница, соя', calories: 295 },
+    { id: 'set-evening', name: 'Вечер вдвоём', category: 'sets', price: 1490, weight: 780, pieces: 24, art: 'set', badge: 'На двоих', description: 'Филадельфия, Калифорния и Запечённый лосось. Три разных настроения для одного вечера.', ingredients: 'Филадельфия × 8, Калифорния × 8, Запечённый лосось × 8', allergens: 'Рыба, ракообразные, молоко, яйца, соя, пшеница', calories: 235 },
+    { id: 'set-company', name: 'Большая компания', category: 'sets', price: 2490, weight: 1280, pieces: 40, art: 'set', description: 'Филадельфия, Унаги, Калифорния, запечённый лосось и креветка темпура — по 8 штук.', ingredients: 'Пять роллов по 8 штук', allergens: 'Рыба, ракообразные, молоко, яйца, пшеница, соя, кунжут', calories: 246 },
+    { id: 'salmon-nigiri', name: 'Суши с лососем', category: 'sushi', price: 190, weight: 40, pieces: 1, art: 'nigiri', description: 'Лосось на подушке из риса. Вкус, которому не нужны лишние слова.', ingredients: 'Рис, лосось', allergens: 'Рыба', calories: 190 },
+    { id: 'eel-nigiri', name: 'Суши с угрём', category: 'sushi', price: 220, weight: 40, pieces: 1, art: 'eel', description: 'Копчёный угорь, рис, нори, соус унаги и кунжут.', ingredients: 'Рис, угорь, нори, соус унаги, кунжут', allergens: 'Рыба, соя, пшеница, кунжут', calories: 230 },
+    { id: 'mango-drink', name: 'Манго-маракуйя', category: 'drinks', price: 190, weight: 400, pieces: null, art: 'drink', description: 'Яркий тропический лимонад с манго и маракуйей.', ingredients: 'Вода, пюре манго, пюре маракуйи, сахар, сок лимона', allergens: 'Индивидуальная непереносимость компонентов', calories: 48 },
+    { id: 'berry-drink', name: 'Ягодный морс', category: 'drinks', price: 150, weight: 400, pieces: null, art: 'berry', description: 'Морс из клюквы и брусники с приятной кислинкой.', ingredients: 'Вода, клюква, брусника, сахар', allergens: 'Индивидуальная непереносимость компонентов', calories: 42 },
+    { id: 'soy', name: 'Соевый соус', category: 'extras', price: 40, weight: 30, art: 'sauce', description: 'Дополнительная порция соевого соуса.', ingredients: 'Соевые бобы, пшеница, вода, соль', allergens: 'Соя, пшеница', calories: 53 },
+    { id: 'ginger', name: 'Имбирь и васаби', category: 'extras', price: 60, weight: 40, art: 'ginger', description: 'Для тех, кто любит чуть больше остроты.', ingredients: 'Маринованный имбирь, паста васаби', allergens: 'Горчица; состав пасты уточняется при подключении меню', calories: 65 }
+  ].map(p => Object.freeze({ ...p, available: true }));
+  root.UnagiMenu = {
+    mode: 'demo',
+    categories: [ ['all', 'Всё меню'], ['rolls', 'Роллы'], ['sets', 'Сеты'], ['hot', 'Горячее'], ['sushi', 'Суши'], ['drinks', 'Напитки'], ['extras', 'Дополнительно'] ],
+    async load() { return products; }
+  };
+})(globalThis);
