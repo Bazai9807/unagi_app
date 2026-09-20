@@ -7,7 +7,7 @@
 - По новому явному выбору владельца iOS создаётся полностью нативным на SwiftUI, а не WKWebView. Проект: `ios/Unagi.xcodeproj`.
 - Добавлены выбор бренда и точки, меню из публичного API, категории и поиск, избранное, корзина, способы получения/оплаты, серверный quote и локальная история только тестовых заказов. Настоящая отправка отсутствует: backend `/orders` по-прежнему отвечает 503.
 - Публичный `/config` backend расширен включёнными способами оплаты и условиями доставки точки. Серверную версию нужно развернуть до проверки iOS quote; текущая установленная версия сервера этих полей ещё не отдаёт.
-- `node --test tests/domain.test.cjs`: 5/5. `node --test backend/test/platform.test.js`: 18/18. `swiftc -frontend -parse` и `plutil -lint` проходят. Сборка `xcodebuild` в этой среде остановлена ошибкой SwiftUI macro plugin (`sandbox-exec: sandbox_apply: Operation not permitted`); запуск на симуляторе/телефоне не проверен.
+- `node --test tests/domain.test.cjs`: 5/5. `node --test backend/test/platform.test.js`: 18/18. `swiftc -frontend -parse` и `plutil -lint` проходят. 20 сентября проект успешно собран кнопкой Run в Xcode 27.0: `Build Succeeded`, создан `Unagi.app` для iPhone Simulator. Запуск на симуляторе не подтверждён: CoreSimulatorService на этом Mac не отвечает, установленный iOS Simulator Runtime не найден; `xcodebuild -downloadPlatform iOS` завершается `Unable to connect to simulator`. Запуск на телефоне не проверен.
 - Нативное iOS-приложение пока не повторяет описания, аллергены и изображения Android: публичное API сейчас отдаёт только краткие поля продукта. Вход покупателя, история серверных заказов, реальные заказы и платежи требуют завершения backend-интеграций.
 
 ## Развёртывание сервера и телефон
