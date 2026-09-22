@@ -88,3 +88,11 @@ Worker раз в минуту формирует напоминания по п�
 - [Apple 4.2.6: приложения из коммерческих шаблонов](https://developer.apple.com/app-store/review/guidelines/#minimum-functionality)
 
 Продуктовые решения: `../docs/PLATFORM-REQUIREMENTS.md`. Передача между ноутбуками: `../docs/HANDOFF.md`.
+
+## Разделение доступа (22 сентября 2026)
+
+Вход принимает необязательное поле `portal`: `platform` или `business`. Веб-кабинеты передают его обязательно; несовместимая роль получает 403 до создания сессии. Все права определяет серверная роль, а не адрес страницы.
+
+Только platform может настраивать/проверять iiko и получать снимки меню. Owner сохраняет право подключать tbank своего бренда через integrations POST. Technical fields brand(menuId, organizationId, priceCategoryId), branch(terminalGroupId, priceCategoryId), paymentMethod(iikoPaymentTypeId), promo(iikoActionId) исключаются из ответов бизнесу; попытка передать их возвращает 403. При PUT их нужно опускать, сервер сохраняет значения из базы.
+
+Owner может читать свои тарифы и счета; остальные бизнес-роли не могут. Изменения тарифов/счетов — platform. Создание owner — platform; owner создаёт manager/operator/analyst. Журнал бизнеса содержит только действия его сотрудников без details. Полный журнал — `/api/platform/audit`.

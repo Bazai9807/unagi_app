@@ -5,6 +5,10 @@ import { id,need,seal,unseal,passwordHash } from './security.js';
 import { audit } from './audit.js';
 import { iikoRead } from './providers.js';
 
+const technicalFields={brand:['menuId','organizationId','priceCategoryId'],branch:['terminalGroupId','priceCategoryId'],paymentMethod:['iikoPaymentTypeId'],promo:['iikoActionId']};
+const visibleRecord=(req,kind,r)=>req.user.role==='platform'?r:{...r,data:Object.fromEntries(Object.entries(r.data).filter(([key])=>!(technicalFields[kind]||[]).includes(key)))};
+function guardFields(req,kind,data){if(req.user.role!=='platform')for(const key of technicalFields[kind]||[])need(!Object.hasOwn(data,key),403,'Технические настройки изменяет разработчик');}
+const readers={brand:['owner','manager'],branch:['owner','manager'],paymentMethod:['owner','manager'],promo:['owner','manager'],tariff:['owner']};
 export function registerAdmin(app,db,config){
   app.get('/api/platform/tenants',{preHandler:app.platform},async()=>rows(db,'SELECT * FROM tenants ORDER BY created_at'));
   app.post('/api/platform/tenants',{preHandler:app.platform},async req=>{
@@ -18,16 +22,16 @@ export function registerAdmin(app,db,config){
   app.get('/api/admin/:tenant/overview',async req=>{
     const tenant=await app.scope(req);const tenantData=await one(db,'SELECT * FROM tenants WHERE id=$1',[tenant]);
     const [brands,branches,methods,integrations]=await Promise.all([list(db,tenant,'brand'),list(db,tenant,'branch'),list(db,tenant,'paymentMethod'),list(db,tenant,'integration')]);
-    return {tenant:tenantData,brands,branches,methods,integrations:integrations.map(r=>({id:r.id,provider:r.data.provider,brandId:r.data.brandId,configured:true,verified:false})),
+    return {tenant:req.user.role==='platform'?tenantData:{id:tenantData.id,name:tenantData.name,accepting_orders:tenantData.accepting_orders},brands:brands.map(r=>visibleRecord(req,'brand',r)),branches:branches.map(r=>visibleRecord(req,'branch',r)),methods:methods.map(r=>visibleRecord(req,'paymentMethod',r)),integrations:integrations.filter(r=>req.user.role==='platform'||(req.user.role==='owner'&&r.data.provider==='tbank')).map(r=>({id:r.id,provider:r.data.provider,brandId:r.data.brandId,configured:true,verified:false})),
       capabilities:{orders:'sandbox',payments:'not_verified',loyalty:'not_connected',call:config.smsruKey?'configured_not_verified':'not_configured',email:config.sendEmail&&config.smtpHost?'configured':'preview'},
       release:'0.2.0-local',production:config.production};
   });
   const writeRoles=['owner','manager'];
   for(const [kind,schema] of Object.entries(schemas)){
-    app.get('/api/admin/:tenant/'+kind,async req=>{const tenant=await app.scope(req);return list(db,tenant,kind);});
+    app.get('/api/admin/:tenant/'+kind,async req=>{const tenant=await app.scope(req,readers[kind]);return (await list(db,tenant,kind)).map(r=>visibleRecord(req,kind,r));});
     app.post('/api/admin/:tenant/'+kind,async req=>{
       const tenant=await app.scope(req,writeRoles);if(kind==='tariff')need(req.user.role==='platform',403,'Тариф назначает оператор платформы');
-      const data=schema.parse(req.body);const recordId=id();
+      guardFields(req,kind,req.body||{});const data=schema.parse(req.body);const recordId=id();
       return db.transaction(async tx=>{
         if(data.brandId)need(await record(tx,tenant,'brand',data.brandId),400,'Бренд не найден');
           if(kind==='tariff'){
@@ -38,18 +42,19 @@ export function registerAdmin(app,db,config){
         const tenantRow=await one(tx,'SELECT disabled_features FROM tenants WHERE id=$1',[tenant]);if(kind==='promo')need(!tenantRow.disabled_features.includes('promotions'),403,'Управление акциями ограничено оператором');
         const created=await insert(tx,tenant,kind,recordId,data);await audit(tx,tenant,req.user.id,kind+'.created',recordId);
         if(kind==='brand'){await insert(tx,tenant,'theme',recordId,{draft:theme.parse({}),published:null,history:[]});}
-        return created;
+        return visibleRecord(req,kind,created);
       });
     });
     app.put('/api/admin/:tenant/'+kind+'/:id',async req=>{
       const tenant=await app.scope(req,writeRoles);need(kind!=='tariff',409,'Создайте новый тариф с датой вступления; история тарифов неизменяема');
-      const b=revisionBody(schema).parse(req.body);
+      guardFields(req,kind,req.body?.data||{});const b=revisionBody(schema).parse(req.body);
       return db.transaction(async tx=>{
         const existing=await record(tx,tenant,kind,req.params.id);need(existing,404,'Запись не найдена');
         if(b.data.brandId)need(existing.data.brandId===b.data.brandId,400,'Перенос между брендами запрещён; создайте новую запись');
         const tenantRow=await one(tx,'SELECT disabled_features FROM tenants WHERE id=$1',[tenant]);if(kind==='promo')need(!tenantRow.disabled_features.includes('promotions'),403,'Управление акциями ограничено');
+        if(req.user.role!=='platform')for(const key of technicalFields[kind]||[])b.data[key]=existing.data[key];
         const result=await update(tx,tenant,kind,req.params.id,b.data,b.revision);need(result,409,'Данные изменились. Обновите страницу.');
-        await audit(tx,tenant,req.user.id,kind+'.updated',req.params.id,{revision:result.revision});return result;
+        await audit(tx,tenant,req.user.id,kind+'.updated',req.params.id,{revision:result.revision});return visibleRecord(req,kind,result);
       });
     });
   }
@@ -68,12 +73,12 @@ export function registerAdmin(app,db,config){
       const result=await update(tx,tenant,'theme',old.id,{draft:selected,published:selected,version,history},b.revision);need(result,409,'Данные изменились');await audit(tx,tenant,req.user.id,b.restoreVersion?'theme.restored':'theme.published',old.id,{version});return result;
     });
   });
-  app.get('/api/admin/:tenant/audit',async req=>{const tenant=await app.scope(req,['owner','manager']);return rows(db,'SELECT * FROM audit WHERE tenant_id=$1 ORDER BY id DESC LIMIT 200',[tenant]);});
+  app.get('/api/admin/:tenant/audit',async req=>{const tenant=await app.scope(req,['owner','manager']);return req.user.role==='platform'?rows(db,'SELECT * FROM audit WHERE tenant_id=$1 ORDER BY id DESC LIMIT 200',[tenant]):rows(db,`SELECT a.id,a.actor,a.action,a.target,a.created_at FROM audit a JOIN users u ON u.id=a.actor WHERE a.tenant_id=$1 AND u.tenant_id=$1 AND a.action ~ '^(order\\.|theme\\.|brand\\.|branch\\.|paymentMethod\\.|promo\\.|user\\.|auth\\.)' ORDER BY a.id DESC LIMIT 200`,[tenant]);});
   app.get('/api/platform/audit',{preHandler:app.platform},async()=>rows(db,'SELECT * FROM audit ORDER BY id DESC LIMIT 200'));
   app.get('/api/admin/:tenant/users',async req=>{const tenant=await app.scope(req,['owner']);return rows(db,'SELECT id,name,email,role,active,created_at FROM users WHERE tenant_id=$1 ORDER BY created_at',[tenant]);});
   app.post('/api/admin/:tenant/users',async req=>{
     const tenant=await app.scope(req,['owner']);const b=z.object({name:z.string().min(1).max(100),email:z.string().email().max(200),role:z.enum(['owner','manager','operator','analyst']),password:z.string().min(14).max(200)}).strict().parse(req.body);
-    const password=await passwordHash(b.password),userId=id();
+    need(b.role!=='owner'||req.user.role==='platform',403,'Владельца назначает разработчик');const password=await passwordHash(b.password),userId=id();
     return db.transaction(async tx=>{await tx.query('INSERT INTO users(id,name,email,role,password,tenant_id) VALUES($1,$2,$3,$4,$5,$6)',[userId,b.name,b.email.toLowerCase(),b.role,password,tenant]);await audit(tx,tenant,req.user.id,'user.created',userId,{role:b.role});return {id:userId};});
   });
   app.patch('/api/admin/:tenant/users/:id',async req=>{
@@ -86,19 +91,19 @@ export function registerAdmin(app,db,config){
     const tenant=await app.scope(req,['owner']),b=z.discriminatedUnion('provider',[
       z.object({provider:z.literal('iiko'),brandId:resourceId,apiLogin:z.string().min(1).max(1000)}).strict(),
       z.object({provider:z.literal('tbank'),brandId:resourceId,terminalKey:z.string().min(1).max(100),password:z.string().min(1).max(1000)}).strict(),
-    ]).parse(req.body);need(await record(db,tenant,'brand',b.brandId),404,'Бренд не найден');
+    ]).parse(req.body);need(req.user.role==='platform'||b.provider==='tbank',403,'Интеграцией iiko управляет разработчик');need(await record(db,tenant,'brand',b.brandId),404,'Бренд не найден');
     const key=b.provider+'_'+b.brandId;const data={provider:b.provider,brandId:b.brandId,secret:seal(b,config.key)};
     return db.transaction(async tx=>{const old=await record(tx,tenant,'integration',key);if(old){need(await update(tx,tenant,'integration',key,data,old.revision),409,'Настройки изменились');}else await insert(tx,tenant,'integration',key,data);await audit(tx,tenant,req.user.id,'integration.credentials',key);return {configured:true,verified:false};});
   });
   app.post('/api/admin/:tenant/integrations/:brand/check-iiko',async req=>{
-    const tenant=await app.scope(req,['owner']),r=await record(db,tenant,'integration','iiko_'+req.params.brand);need(r,409,'Укажите API-ключ iiko');
+    await app.platform(req);const tenant=await app.scope(req,[]),r=await record(db,tenant,'integration','iiko_'+req.params.brand);need(r,409,'Укажите API-ключ iiko');
     const response=await iikoRead('/api/1/organizations',{},unseal(r.data.secret,config.key));
     await audit(db,tenant,req.user.id,'integration.iiko.read-check',req.params.brand);
     return {organizations:(response.organizations||[]).map(o=>({id:o.id,name:o.name})),orderIntegrationVerified:false};
   });
   app.get('/api/admin/:tenant/catalog',async req=>{const tenant=await app.scope(req);return list(db,tenant,'product');});
   app.post('/api/admin/:tenant/integrations/:brand/menu-preview',async req=>{
-    const tenant=await app.scope(req,['owner','manager']),brand=await record(db,tenant,'brand',req.params.brand),r=await record(db,tenant,'integration','iiko_'+req.params.brand);
+    await app.platform(req);const tenant=await app.scope(req,[]),brand=await record(db,tenant,'brand',req.params.brand),r=await record(db,tenant,'integration','iiko_'+req.params.brand);
     need(brand&&r&&brand.data.menuId&&brand.data.organizationId,409,'Заполните ключ, организацию и внешнее меню iiko');
     const result=await iikoRead('/api/2/menu/by_id',{externalMenuId:brand.data.menuId,organizationIds:[brand.data.organizationId],...(brand.data.priceCategoryId?{priceCategoryId:brand.data.priceCategoryId}:{})},unseal(r.data.secret,config.key));
     const snapshotId=id();await insert(db,tenant,'menuSnapshot',snapshotId,{brandId:brand.id,receivedAt:new Date().toISOString(),source:'iiko',payload:result});await audit(db,tenant,req.user.id,'menu.snapshot',snapshotId);

@@ -71,7 +71,7 @@ test('theme draft is not public until published; revision conflicts cannot overw
   pub=(await app.inject('/api/public/unagi/config')).json();assert.equal(pub.brands[0].theme.primary,'#112233');
 });
 test('secrets stay encrypted and never appear in overview or audit',async()=>{
-  const secret='test-provider-secret';const r=await req(owner,'POST','/api/admin/unagi/integrations',{provider:'iiko',brandId:'unagi-1',apiLogin:secret});assert.equal(r.statusCode,200,r.body);
+  const secret='test-provider-secret';const r=await req(platform,'POST','/api/admin/unagi/integrations',{provider:'iiko',brandId:'unagi-1',apiLogin:secret});assert.equal(r.statusCode,200,r.body);
   const row=await record(db,'unagi','integration','iiko_unagi-1');assert.ok(!JSON.stringify(row).includes(secret));
   assert.equal(unseal(row.data.secret,config.key).apiLogin,secret);
   assert.ok(!(await req(owner,'GET','/api/admin/unagi/overview')).body.includes(secret));
@@ -121,6 +121,32 @@ test('call verification is bound to tenant and proof, and is consumed exactly on
 });
 test('logout revokes server session immediately',async()=>{
   const headers=await login('operator@unagi.local');assert.equal((await req(headers,'POST','/api/auth/logout')).statusCode,200);assert.equal((await req(headers,'GET','/api/auth/me')).statusCode,401);
+});
+
+test('business cannot use developer functions and technical settings stay intact',async()=>{
+  for(const [method,url,body] of [
+    ['GET','/api/platform/tenants'],['GET','/api/platform/audit'],['GET','/api/platform/mail'],
+    ['POST','/api/admin/unagi/integrations',{provider:'iiko',brandId:'unagi-1',apiLogin:'blocked'}],
+    ['POST','/api/admin/unagi/integrations/unagi-1/check-iiko',{}],
+    ['POST','/api/admin/unagi/integrations/unagi-1/menu-preview',{}],
+    ['POST','/api/admin/unagi/tariff',{}],['POST','/api/admin/unagi/invoices',{}],
+    ['POST','/api/admin/unagi/invoices/unknown/paid',{}],
+    ['POST','/api/admin/unagi/users',{name:'Forbidden owner',email:'forbidden@example.invalid',role:'owner',password}],
+  ])assert.equal((await req(owner,method,url,body)).statusCode,403,url);
+  const original=await record(db,'unagi','brand','unagi-1');
+  let changed=await req(platform,'PUT','/api/admin/unagi/brand/unagi-1',{revision:original.revision,data:{...original.data,menuId:'private-menu',organizationId:'private-org'}});assert.equal(changed.statusCode,200);
+  const publicBrand=(await req(owner,'GET','/api/admin/unagi/brand')).json().find(r=>r.id==='unagi-1');
+  assert.ok(!Object.hasOwn(publicBrand.data,'menuId'));
+  assert.equal((await req(owner,'PUT','/api/admin/unagi/brand/unagi-1',{revision:publicBrand.revision,data:{...publicBrand.data,menuId:'overwrite'}})).statusCode,403);
+  changed=await req(owner,'PUT','/api/admin/unagi/brand/unagi-1',{revision:publicBrand.revision,data:{...publicBrand.data,name:'Owner edited name'}});assert.equal(changed.statusCode,200,changed.body);
+  assert.equal((await record(db,'unagi','brand','unagi-1')).data.menuId,'private-menu');
+  assert.equal((await req(owner,'POST','/api/admin/unagi/integrations',{provider:'tbank',brandId:'unagi-1',terminalKey:'own-bank',password:'own-bank-password'})).statusCode,200);
+  const overview=(await req(owner,'GET','/api/admin/unagi/overview')).json();assert.ok(overview.integrations.every(i=>i.provider==='tbank'));assert.ok(!JSON.stringify(overview).includes('private-menu'));
+  const log=await req(owner,'GET','/api/admin/unagi/audit');assert.equal(log.statusCode,200,log.body);assert.ok(log.json().every(a=>!a.action.startsWith('integration.')));assert.ok(log.json().some(a=>a.action==='brand.updated'));
+  assert.equal((await req(operator,'GET','/api/admin/unagi/tariff')).statusCode,403);
+  for(const [email,portal] of [['owner@unagi.local','platform'],['admin@platform.local','business']]){
+    const response=await app.inject({method:'POST',url:'/api/auth/login',headers:{origin},payload:{email,password,portal}});assert.equal(response.statusCode,403);assert.equal(response.cookies.length,0);
+  }
 });
 
 test('server first login can enroll 2FA while business endpoints stay protected',async()=>{

@@ -34,10 +34,11 @@ export function registerAuth(app,db,config){
   });
   app.post('/api/auth/login',async(req,reply)=>{
     need(req.headers.origin===config.origin,403,'Неверный источник входа');
-    const body=z.object({email:z.string().email().max(200),password:z.string().min(1).max(200),code:z.string().regex(/^\d{6}$/).optional()}).parse(req.body);
+    const body=z.object({email:z.string().email().max(200),password:z.string().min(1).max(200),code:z.string().regex(/^\d{6}$/).optional(),portal:z.enum(['platform','business']).optional()}).parse(req.body);
     await throttle(db,'login-ip:'+hash(req.ip),30);await throttle(db,'login-email:'+hash(body.email.toLowerCase()),10);
     const user=await one(db,'SELECT * FROM users WHERE email=$1',[body.email.toLowerCase()]);
     const valid=await checkPassword(body.password,user?.password);need(valid&&user?.active,401,'Неверные данные входа');
+    if(body.portal)need((body.portal==='platform')===(user.role==='platform'),403,body.portal==='platform'?'Этот вход предназначен для разработчика. Используйте кабинет бизнеса.':'Это учётная запись разработчика. Используйте кабинет разработчика.');
     if(user.totp_secret){const step=verifyTotp(unseal(user.totp_secret,config.key),body.code||'',user.totp_step);need(step!==null,401,'Требуется действующий код двухфакторной защиты');
       const result=await one(db,'UPDATE users SET totp_step=$2 WHERE id=$1 AND (totp_step IS NULL OR totp_step<$2) RETURNING id',[user.id,step]);need(result,401,'Код уже использован');}
     const raw=token(),csrf=token();await db.query('INSERT INTO sessions(token_hash,user_id,csrf,expires_at) VALUES($1,$2,$3,now()+interval \'8 hours\')',[hash(raw),user.id,csrf]);

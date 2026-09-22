@@ -35,7 +35,7 @@ export async function deliverOne(db,config){
   finally{smtp.close();}return true;
 }
 export function registerBilling(app,db){
-  app.get('/api/admin/:tenant/invoices',async req=>{const tenant=await app.scope(req,['owner','manager']);return rows(db,'SELECT * FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC',[tenant]);});
+  app.get('/api/admin/:tenant/invoices',async req=>{const tenant=await app.scope(req,['owner']);return rows(db,'SELECT * FROM invoices WHERE tenant_id=$1 ORDER BY created_at DESC',[tenant]);});
   app.post('/api/admin/:tenant/invoices',async req=>{await app.platform(req);const b=z.object({period:z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/)}).parse(req.body);const invoice=await generateInvoice(db,req.params.tenant,b.period);await audit(db,req.params.tenant,req.user.id,'invoice.generated',invoice.id);return invoice;});
   app.post('/api/admin/:tenant/invoices/:id/paid',async req=>{await app.platform(req);const b=z.object({reference:z.string().trim().min(3).max(200)}).parse(req.body);
     return db.transaction(async tx=>{const result=await one(tx,"UPDATE invoices SET status='paid',data=data||$3::jsonb WHERE tenant_id=$1 AND id=$2 AND status='unpaid' RETURNING *",[req.params.tenant,req.params.id,JSON.stringify({paymentReference:b.reference})]);need(result,409,'Счёт не найден или уже оплачен');await tx.query("UPDATE outbox SET status='cancelled' WHERE tenant_id=$1 AND dedup_key LIKE $2 AND status='pending'",[req.params.tenant,'invoice:'+req.params.id+':%']);await audit(tx,req.params.tenant,req.user.id,'invoice.paid',req.params.id);return result;});});
