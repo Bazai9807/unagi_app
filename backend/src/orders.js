@@ -30,9 +30,10 @@ export async function createSandbox(db,tenant,input,key,actor){
 export function registerOrders(app,db,config){
   app.get('/api/public/:tenant/config',async req=>{
     const tenant=await one(db,'SELECT id,name,accepting_orders FROM tenants WHERE id=$1',[req.params.tenant]);need(tenant,404,'Бизнес не найден');
-    const brands=await list(db,tenant.id,'brand'),branches=await list(db,tenant.id,'branch'),themes=await list(db,tenant.id,'theme');
+    const brands=await list(db,tenant.id,'brand'),branches=await list(db,tenant.id,'branch'),themes=await list(db,tenant.id,'theme'),methods=await list(db,tenant.id,'paymentMethod');
     return {business:tenant,mode:'sandbox',liveOrdersAvailable:config.liveOrders,brands:brands.filter(b=>b.data.active).map(b=>({id:b.id,name:b.data.name,description:b.data.description,theme:themes.find(t=>t.id===b.id)?.data.published||null})),
-      branches:branches.filter(b=>b.data.active).map(b=>({id:b.id,brandId:b.data.brandId,name:b.data.name,address:b.data.address,modes:b.data.modes,acceptingOrders:b.data.acceptingOrders}))};
+      branches:branches.filter(b=>b.data.active).map(b=>({id:b.id,brandId:b.data.brandId,name:b.data.name,address:b.data.address,modes:b.data.modes,acceptingOrders:b.data.acceptingOrders,minimum:b.data.minimum,deliveryFee:b.data.deliveryFee,freeDelivery:b.data.freeDelivery})),
+      paymentMethods:methods.filter(m=>m.data.enabled).map(m=>({id:m.id,brandId:m.data.brandId,name:m.data.name,type:m.data.type}))};
   });
   app.get('/api/public/:tenant/menu/:branch',async req=>{
     const b=await record(db,req.params.tenant,'branch',req.params.branch);need(b&&b.data.active,404,'Точка не найдена');

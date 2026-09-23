@@ -67,6 +67,8 @@ test('theme draft is not public until published; revision conflicts cannot overw
   const saved=await req(owner,'PUT','/api/admin/unagi/themes/unagi-1',{revision:old.revision,data:draft});assert.equal(saved.statusCode,200,saved.body);
   assert.equal((await req(owner,'PUT','/api/admin/unagi/themes/unagi-1',{revision:old.revision,data:draft})).statusCode,409);
   let pub=(await app.inject('/api/public/unagi/config')).json();assert.equal(pub.brands[0].theme,null);
+  assert.ok(pub.paymentMethods.some(m=>m.id==='unagi-1-cash'&&m.brandId==='unagi-1'));
+  assert.ok(pub.branches[0].minimum>0);
   const published=await req(owner,'POST','/api/admin/unagi/themes/unagi-1/publish',{revision:saved.json().revision});assert.equal(published.statusCode,200,published.body);
   pub=(await app.inject('/api/public/unagi/config')).json();assert.equal(pub.brands[0].theme.primary,'#112233');
 });
